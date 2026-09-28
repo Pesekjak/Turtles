@@ -47,5 +47,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Turtles-${{ steps.slug.outputs.sha7 }}
-          path: plugin/build/libs/*.jar
+          path: build/libs/*.jar
           if-no-files-found: error
