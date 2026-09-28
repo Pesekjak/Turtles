@@ -1,0 +1,14 @@
+name: Turtles
+version: '$version'
+main: dev.pesek.turtles.Turtles
+description: Rebar Addon that adds programmable computers to the game
+api-version: '26.2'
+
+dependencies:
+  server:
+    Rebar:
+      load: BEFORE
+      required: true
+    Pylon:
+      load: BEFORE
+      required: true

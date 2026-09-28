@@ -1,0 +1,9 @@
+addon: "Turtles"
+
+guide:
+  page:
+    computers: "<white>Computers</white>"
+
+item:
+  computer:
+    name: "<yellow>Computer</yellow>"
