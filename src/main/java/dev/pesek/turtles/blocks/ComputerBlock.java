@@ -21,10 +21,8 @@ import io.github.pylonmc.rebar.datatypes.RebarSerializers;
 import io.github.pylonmc.rebar.event.RebarBlockUnloadEvent;
 import io.github.pylonmc.rebar.event.api.annotation.MultiHandler;
 import io.github.pylonmc.rebar.waila.WailaDisplay;
-import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
-import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
@@ -94,16 +92,21 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
          */
         record Shutdown<T extends Computer>(@Nullable PersistentDataContainer computerData,
                                             @Nullable String message,
-                                            boolean failed)
-                implements State<T> {
+                                            boolean failed) implements State<T> {
         }
     }
 
-    private final @Nullable UUID ownerId;
-    private State<T> state;
+    private static final ScopedValue<ComputerBlock<?, ?>> PARENT = ScopedValue.newInstance();
+
+    @Nullable UUID ownerId;
+    @Nullable State<T> state;
 
     public ComputerBlock(@NotNull Block block, @NotNull BlockCreateContext context) throws IOException {
         super(block, context);
+        if (hotswap()) {
+            return;
+        }
+
         // changed when block is placed by player
         ownerId = context.getPlayer() != null ? context.getPlayer().getUniqueId() : null;
         PersistentDataContainer computerBlockData = null;
@@ -116,10 +119,44 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
 
     public ComputerBlock(@NotNull Block block, @NotNull PersistentDataContainer pdc) throws IOException {
         super(block, pdc);
+        if (hotswap()) {
+            return;
+        }
+
         PersistentDataContainer computerBlockData = pdc.get(COMPUTER_BLOCK_DATA, PersistentDataType.TAG_CONTAINER);
         // on block load, read the saved owner
         ownerId = computerBlockData != null ? computerBlockData.get(OWNER_ID, RebarSerializers.UUID) : null;
         restoreState(computerBlockData);
+    }
+
+    protected final B moveTo(Location location) {
+        return ScopedValue.where(PARENT, this).call(() -> {
+            Preconditions.checkState(location.getWorld() != null, "missing world");
+            Preconditions.checkState(location.getWorld().getBlockAt(location).getType().isAir(), "location must not be occupied "
+                    + "by a different block");
+            //noinspection unchecked
+            B block = (B) BlockStorage.placeBlock(location, getKey());
+            BlockStorage.breakBlock(this, new BlockBreakContext.PluginBreak(getBlock(), false, true));
+            return block;
+        });
+    }
+
+    @ForOverride
+    @MustBeInvokedByOverriders
+    protected void hotswap(B from) {
+        ownerId = from.ownerId;
+        state = from.state;
+        from.ownerId = null;
+        from.state = null;
+    }
+
+    private boolean hotswap() {
+        if (PARENT.isBound()) {
+            //noinspection unchecked
+            hotswap((B) PARENT.get());
+            return true;
+        }
+        return false;
     }
 
     private void requestComputer(@Nullable PersistentDataContainer computerData) throws IOException {
@@ -130,7 +167,18 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
         }
     }
 
+    @ForOverride
+    @MustBeInvokedByOverriders
+    protected void beforeStateRestore() {
+    }
+
+    @ForOverride
+    @MustBeInvokedByOverriders
+    protected void afterStateRestore() {
+    }
+
     private void restoreState(@Nullable PersistentDataContainer pdc) throws IOException {
+        beforeStateRestore();
         boolean shouldStart = pdc == null
                 || pdc.getOrDefault(SHOULD_STARTUP, PersistentDataType.BOOLEAN, true);
         PersistentDataContainer computerData = pdc != null
@@ -143,10 +191,14 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
             String message = pdc.get(SHUTDOWN_MESSAGE, PersistentDataType.STRING);
             state = new State.Shutdown<>(computerData, message, false);
         }
+        afterStateRestore();
     }
 
     private PersistentDataContainer serializeState(boolean preserveState) throws IOException {
         PersistentDataContainer pdc = PersistentDataContainerFactory.empty();
+        if (state == null) {
+            return pdc;
+        }
         if (ownerId != null) {
             pdc.set(OWNER_ID, RebarSerializers.UUID, ownerId);
         }
@@ -171,6 +223,7 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
     }
 
     private Optional<State.Running<T>> toRunningState() throws IOException {
+        Preconditions.checkState(state != null, "invalid computer block");
         if (!(state instanceof State.Shutdown<T>(PersistentDataContainer computerData, String _, boolean _))) {
             return Optional.of((State.Running<T>) state);
         }
@@ -179,6 +232,7 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
     }
 
     private State.Shutdown<T> toShutdownState(@Nullable String message, boolean failed, boolean preserveState) throws Exception {
+        Preconditions.checkState(state != null, "invalid computer block");
         if (!(state instanceof State.Running<T>(T computer))) {
             return (State.Shutdown<T>) state;
         }
@@ -348,21 +402,25 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
         Dialog dialog = Dialog.create(builder -> builder.empty()
                 .base(DialogUtils.dialogBase(Component.text("This computer is turned off", NamedTextColor.YELLOW),
                         body, null))
-                // TODO use multi-action from dialog utils
-                .type(DialogType.confirmation(
-                        DialogUtils.actionButton("Turn On", (_, _) -> {
-                            try {
-                                toRunningState().ifPresentOrElse(
-                                        running -> running.computer().open(player),
-                                        () -> openShutdownDialog(player, ((State.Shutdown<T>) state).message)
-                                );
-                            } catch (IOException e) {
-                                Turtles.logger().error("Failed to turn on computer from shutdown state", e);
-                            }
-                        }),
-                        DialogUtils.actionButton("Cancel", (_, _) ->
-                                player.closeDialog())
-                ))
+                .type(DialogUtils.multiAction(List.of(
+                                DialogUtils.actionButton("Turn On", (_, _) -> {
+                                    try {
+                                        toRunningState().ifPresentOrElse(
+                                                running -> running.computer().open(player),
+                                                () -> {
+                                                    if (state instanceof State.Shutdown<T>(PersistentDataContainer _,
+                                                                                           String nextMessage, boolean _)) {
+                                                        openShutdownDialog(player, nextMessage);
+                                                    }
+                                                }
+                                        );
+                                    } catch (IOException e) {
+                                        Turtles.logger().error("Failed to turn on computer from shutdown state", e);
+                                    }
+                                }),
+                                DialogUtils.actionButton("Cancel", (_, _) ->
+                                        player.closeDialog())
+                        ), null, 2))
         );
         player.showDialog(dialog);
     }
@@ -371,6 +429,9 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
     @MustBeInvokedByOverriders
     @MultiHandler(priorities = EventPriority.MONITOR)
     public void onUnload(@NotNull RebarBlockUnloadEvent event, @NotNull EventPriority priority) {
+        if (state == null) {
+            return;
+        }
         Location location = event.getBlock().getLocation();
         try {
             toShutdownState("Unloaded", true, true);
@@ -382,6 +443,9 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
 
     @Override
     public void onBlockBreak(@NotNull List<ItemStack> drops, @NotNull BlockBreakContext context) {
+        if (state == null) {
+            return;
+        }
         Location location = context.getBlock().getLocation();
         try {
             toShutdownState("Block destroyed", true, true);
@@ -394,6 +458,9 @@ public abstract class ComputerBlock<T extends PhysicalComputer<T, B>, B extends 
     @Override
     @MustBeInvokedByOverriders
     public final void write(@NotNull PersistentDataContainer pdc) {
+        if (state == null) {
+            return;
+        }
         Location location = getBlock().getLocation();
         try {
             PersistentDataContainer computerBlockData = serializeState(true);

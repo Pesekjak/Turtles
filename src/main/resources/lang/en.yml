@@ -7,3 +7,5 @@ guide:
 item:
   computer:
     name: "<yellow>Computer</yellow>"
+  turtle:
+    name: "<aqua>Turtle</aqua>"

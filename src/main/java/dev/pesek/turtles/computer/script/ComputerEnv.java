@@ -226,7 +226,7 @@ public final class ComputerEnv implements JactlEnv {
      * @param consumer consumer of the running script
      * @see #exposeInvocation(Runnable, ScriptRunner.RunningScript)
      */
-    private void consumeInvocation(Consumer<ScriptRunner.RunningScript> consumer) {
+    void consumeInvocation(Consumer<ScriptRunner.RunningScript> consumer) {
         try {
             ScriptRunner.RunningScript currentInvocation = CURRENT_INVOCATION.get();
             Preconditions.checkNotNull(currentInvocation, "currentInvocation");
@@ -251,7 +251,7 @@ public final class ComputerEnv implements JactlEnv {
      * @return wrapped task in which the running script instance can be consumed
      * @see #consumeInvocation(Consumer)
      */
-    private Runnable exposeInvocation(Runnable task, ScriptRunner.RunningScript invocationContext) {
+    Runnable exposeInvocation(Runnable task, ScriptRunner.RunningScript invocationContext) {
         Preconditions.checkNotNull(invocationContext, "invocationContext");
         return () -> {
             try {

@@ -24,9 +24,8 @@ public final class BasicComputerBlock extends ComputerBlock<BasicComputer, Basic
     }
 
     @Override
-    protected ComputerManager.ComputerRequest<BasicComputer> createNewComputer(@Nullable UUID ownerId,
-                                                                               @Nullable PersistentDataContainer pdc)
-            throws IOException {
+    protected ComputerManager.ComputerRequest<BasicComputer> createNewComputer(
+            @Nullable UUID ownerId, @Nullable PersistentDataContainer pdc) throws IOException {
         return ComputerManager.get().create(ownerId, () -> new BasicComputer(this), pdc);
     }
 

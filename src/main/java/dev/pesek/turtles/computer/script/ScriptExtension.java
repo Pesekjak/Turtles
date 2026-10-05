@@ -68,16 +68,19 @@ public interface ScriptExtension {
      */
     static <V> Continuation onMainThread(String source, int offset, ComputerCallable<V> callable, long msDelay) throws Continuation {
         Preconditions.checkNotNull(callable, "callable");
-        ComputerInvocationContext invocationContext = currentContext();
-        throw Continuation.suspendNonBlocking(source, offset, null,
-                (context, _, resumer) -> MainThread.run(() -> {
-                    try {
-                        V result = callable.call(invocationContext);
-                        context.scheduleEvent(() -> resumer.accept(result), msDelay);
-                    } catch (Exception e) {
-                        resumer.accept(new RuntimeError("Error running on main thread", source, offset, e));
-                    }
-                }));
+        throw Continuation.suspendNonBlocking(source, offset, null, (context, _, resumer) -> {
+            ComputerEnv.get().consumeInvocation(currentInvocation -> MainThread.run(() -> {
+                try {
+                    // TODO do some util in computer env that allows to schedule task on executor
+                    //  while keeping the invocation instance available
+                    V result = callable.call(currentInvocation.getInvocationContext());
+                    ComputerEnv.get().exposeInvocation(() ->
+                            context.scheduleEvent(() -> resumer.accept(result), msDelay), currentInvocation).run();
+                } catch (Exception e) {
+                    resumer.accept(new RuntimeError("Error running on main thread", source, offset, e));
+                }
+            }));
+        });
     }
 
     static <V> Continuation onMainThread(String source, int offset, ComputerCallable<V> callable) throws Continuation {

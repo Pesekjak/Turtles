@@ -14,9 +14,17 @@ public interface TurtlesItems {
             .editDataOrSet(DataComponentTypes.RARITY, _ -> ItemRarity.UNCOMMON)
             .build();
 
+    ItemStack TURTLE = ItemStackBuilder.rebar(Material.DRIED_GHAST, TurtlesKeys.Items.TURTLE)
+            .editDataOrSet(DataComponentTypes.MAX_STACK_SIZE, _ -> 1)
+            .editDataOrSet(DataComponentTypes.RARITY, _ -> ItemRarity.RARE)
+            .build();
+
     static void init() {
         RebarItem.register(RebarItem.class, COMPUTER, TurtlesKeys.Items.COMPUTER);
         TurtlesPages.COMPUTERS.addItem(COMPUTER);
+
+        RebarItem.register(RebarItem.class, TURTLE, TurtlesKeys.Items.TURTLE);
+        TurtlesPages.COMPUTERS.addItem(TURTLE);
     }
 
 }

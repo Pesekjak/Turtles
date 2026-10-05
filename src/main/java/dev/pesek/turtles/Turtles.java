@@ -6,6 +6,7 @@ import dev.pesek.turtles.computer.script.ComputerEnv;
 import dev.pesek.turtles.computer.script.JactlExport;
 import dev.pesek.turtles.computer.script.ScriptExtension;
 import dev.pesek.turtles.computer.script.extension.BaseComputerExtension;
+import dev.pesek.turtles.computer.script.extension.TurtleExtension;
 import io.github.pylonmc.rebar.addon.RebarAddon;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -59,6 +60,7 @@ public class Turtles extends JavaPlugin implements RebarAddon, Listener {
         TurtlesBlocks.init();
 
         ScriptExtension.register(BaseComputerExtension.get());
+        ScriptExtension.register(TurtleExtension.get());
 
         System.setProperty("jactl.loop.timeout-freq-check", String.valueOf(config.loopTimeoutFreqCheck()));
 

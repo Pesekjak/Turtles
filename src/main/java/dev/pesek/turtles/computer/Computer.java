@@ -19,7 +19,6 @@ import dev.pesek.turtles.computer.script.ScriptExtension;
 import dev.pesek.turtles.computer.script.ScriptRunner;
 import dev.pesek.turtles.util.*;
 import io.github.pylonmc.rebar.datatypes.RebarSerializers;
-import io.jactl.CompileError;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.input.DialogInput;
@@ -368,7 +367,6 @@ public abstract class Computer {
     public final Optional<EnvVar<?>> getEnvironmentVariable(String name) {
         return getEnvironmentVariables().stream().filter(v -> v.getName().equals(name)).findAny();
     }
-
 
     /**
      * Registers a new static environment variable for this computer.
